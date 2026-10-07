@@ -276,6 +276,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.noise.add_noise = False
     if not args_cli.push_robot:
         env_cfg.events.push_robot = None
+    if task_name in {"Bumi-Flat", "Bumi-Rough"}:
+        # Playback should start from the calibrated neutral pose, not a
+        # randomized training reset.
+        env_cfg.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
+        env_cfg.events.reset_robot_joints.params["velocity_range"] = (0.0, 0.0)
+        env_cfg.events.reset_base.params["pose_range"] = {
+            "x": (0.0, 0.0),
+            "y": (0.0, 0.0),
+            "yaw": (0.0, 0.0),
+        }
+        env_cfg.events.reset_base.params["velocity_range"] = {
+            axis: (0.0, 0.0)
+            for axis in ("x", "y", "z", "roll", "pitch", "yaw")
+        }
     env_cfg.episode_length_s = 40.0
     env_cfg.commands.heading_command=False
     env_cfg.commands.rel_standing_envs = 0.0

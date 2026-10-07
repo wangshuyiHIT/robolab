@@ -51,3 +51,23 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rpo_amp_agent_cfg:RslRlOnPolicyRunnerAmpCfg",
     },
 )
+
+gym.register(
+    id="Bumi-AMP",
+    entry_point=f"{__name__}.amp_env:AmpEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.bumi_amp_env_cfg:BumiAmpEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.bumi_amp_agent_cfg:BumiAmpRunnerCfg",
+    },
+)
+
+gym.register(
+    id="Bumi-AMP-Play",
+    entry_point=f"{__name__}.amp_env:AmpEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.bumi_amp_env_cfg:BumiAmpEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.bumi_amp_agent_cfg:BumiAmpRunnerCfg",
+    },
+)

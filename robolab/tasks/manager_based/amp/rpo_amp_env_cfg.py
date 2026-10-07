@@ -99,6 +99,60 @@ class RPOAmpRewards():
             )
         },
     )
+    leg_sagittal_pair_symmetry = RewTerm(
+        func=mdp.paired_joints_mirror_deviation_l1,
+        weight=0,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[
+                    "l_leg_pitch_joint",
+                    "r_leg_pitch_joint",
+                    "l_knee_pitch_joint",
+                    "r_knee_pitch_joint",
+                    "l_ankle_pitch_joint",
+                    "r_ankle_pitch_joint",
+                ],
+                preserve_order=True,
+            )
+        },
+    )
+    arm_pair_symmetry = RewTerm(
+        func=mdp.paired_joints_mirror_deviation_l1,
+        weight=0,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[
+                    "l_arm_pitch_joint",
+                    "r_arm_pitch_joint",
+                    "l_arm_roll_joint",
+                    "r_arm_roll_joint",
+                    "l_arm_yaw_joint",
+                    "r_arm_yaw_joint",
+                    "l_elbow_pitch_joint",
+                    "r_elbow_pitch_joint",
+                ],
+                preserve_order=True,
+            )
+        },
+    )
+    hip_roll_yaw_pair_symmetry = RewTerm(
+        func=mdp.paired_joints_mirror_deviation_l1,
+        weight=0,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[
+                    "l_leg_roll_joint",
+                    "r_leg_roll_joint",
+                    "l_leg_yaw_joint",
+                    "r_leg_yaw_joint",
+                ],
+                preserve_order=True,
+            )
+        },
+    )
     joint_torques_l2 = RewTerm(
         func=mdp.joint_torques_l2,
         weight=0.0,

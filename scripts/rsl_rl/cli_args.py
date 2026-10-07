@@ -56,7 +56,12 @@ def add_rsl_rl_args(parser: argparse.ArgumentParser):
     arg_group.add_argument(
         "--experiment_name", type=str, default=None, help="Name of the experiment folder where logs will be stored."
     )
-    arg_group.add_argument("--run_name", type=str, default=None, help="Run name suffix to the log directory.")
+    arg_group.add_argument(
+        "--run_name",
+        type=str,
+        default=None,
+        help="Optional action label override in the standard task__action__time run directory name.",
+    )
     # -- load arguments
     arg_group.add_argument("--resume", action="store_true", default=False, help="Whether to resume from a checkpoint.")
     arg_group.add_argument("--load_run", type=str, default=None, help="Name of the run folder to resume from.")
@@ -99,6 +104,8 @@ def update_rsl_rl_cfg(agent_cfg: RslRlBaseRunnerCfg, args_cli: argparse.Namespac
         The updated configuration for RSL-RL agent based on inputs.
     """
     # override the default configuration with CLI arguments
+    if args_cli.experiment_name is not None:
+        agent_cfg.experiment_name = args_cli.experiment_name
     if hasattr(args_cli, "seed") and args_cli.seed is not None:
         # randomly sample a seed if seed = -1
         if args_cli.seed == -1:

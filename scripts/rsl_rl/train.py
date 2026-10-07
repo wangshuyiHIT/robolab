@@ -46,6 +46,7 @@ from isaaclab.app import AppLauncher
 
 # local imports
 import cli_args  # isort: skip
+import log_naming  # isort: skip
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
@@ -113,7 +114,6 @@ if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
 
 import logging
 import re
-from datetime import datetime
 
 import torch
 import gymnasium as gym
@@ -201,7 +201,7 @@ def _resolve_log_dir(
     resume: bool,
     load_run: str,
     load_checkpoint: str,
-    run_name: str | None,
+    log_run_name: str,
     distributed: bool,
     global_rank: int,
 ) -> tuple[str, str | None]:
@@ -217,9 +217,6 @@ def _resolve_log_dir(
             resume_path = _broadcast_resume_path(resume_path, global_rank)
         print(f"[INFO] Resuming weights from checkpoint: {resume_path}")
 
-    log_run_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    if run_name:
-        log_run_name += f"_{run_name}"
     if distributed:
         log_run_name = _broadcast_log_run_name(log_run_name, global_rank)
     # The Ray Tune workflow extracts experiment name using the logging line below, hence, do not change it (see PR #2346, comment-2819298849)
@@ -229,6 +226,16 @@ def _resolve_log_dir(
     if resume:
         print(f"[INFO] Logging new run to directory: {log_dir}")
     return log_dir, resume_path
+
+
+def _resolve_run_name(
+    task_name: str,
+    env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg,
+    agent_cfg: RslRlBaseRunnerCfg,
+) -> str:
+    """Resolve the standardized task + action + time run directory name."""
+    action_name = log_naming.resolve_action_name(task_name, env_cfg, override=agent_cfg.run_name or None)
+    return log_naming.build_standard_run_name(task_name, action_name)
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -280,16 +287,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     log_root_path = os.path.abspath(log_root_path)
     print(f"[INFO] Logging experiment in directory: {log_root_path}")
 
+    run_name = _resolve_run_name(args_cli.task, env_cfg, agent_cfg)
+
     should_resume = agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation"
     log_dir, resume_path = _resolve_log_dir(
         log_root_path,
         resume=should_resume,
         load_run=agent_cfg.load_run,
         load_checkpoint=agent_cfg.load_checkpoint,
-        run_name=agent_cfg.run_name or None,
+        log_run_name=run_name,
         distributed=args_cli.distributed,
         global_rank=global_rank,
     )
+    agent_cfg.run_name = os.path.basename(log_dir)
 
     # set the IO descriptors output directory if requested
     if isinstance(env_cfg, ManagerBasedRLEnvCfg):

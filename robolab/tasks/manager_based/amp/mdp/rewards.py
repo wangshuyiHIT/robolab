@@ -147,6 +147,20 @@ def paired_joints_mean_deviation_l1(
     return torch.abs(torch.mean(joint_deviation, dim=1))
 
 
+def paired_joints_mirror_deviation_l1(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Penalize shared drift in ordered left/right joint pairs from default.
+
+    Joints must be listed as ``[l0, r0, l1, r1, ...]``. Anti-phase gait is allowed
+    because left and right deviations cancel; same-direction limp is penalized.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    joint_error = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    joint_error = joint_error.reshape(joint_error.shape[0], -1, 2)
+    return torch.sum(torch.abs(joint_error[:, :, 0] + joint_error[:, :, 1]), dim=1)
+
+
 def joint_pos_limits(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Penalize joint positions if they cross the soft limits.
 

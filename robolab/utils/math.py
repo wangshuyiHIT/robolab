@@ -74,6 +74,10 @@ def ang_vel_from_quat_diff(quat: torch.Tensor, dt: float, in_frame:str = "body")
         q1 = quat[i].unsqueeze(0)  # from world frame to body, shape (1, 4)
         q2 = quat[i + 1].unsqueeze(0)  # from world frame to body (at next time), shape (1, 4)
 
+        # q and -q encode the same rotation. Use the shortest representation so
+        # sign flips in motion files do not create ~2*pi/dt velocity spikes.
+        use_negative_q2 = torch.sum(q1 * q2, dim=-1, keepdim=True) < 0.0
+        q2 = torch.where(use_negative_q2, -q2, q2)
         diff_quat = math_utils.quat_mul(math_utils.quat_conjugate(q1), q2)
         diff_angle_axis = math_utils.axis_angle_from_quat(diff_quat)
         if in_frame == "world":

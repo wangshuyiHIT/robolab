@@ -42,3 +42,13 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rpo_attn_enc_agent_cfg:RPOAttnEncAgentCfg",
     },
 )
+
+gym.register(
+    id="Bumi-AttnEnc",
+    entry_point=f"{__name__}.attn_enc_env:AttnEncEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.bumi_attn_enc_env_cfg:BumiAttnEncEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.bumi_attn_enc_agent_cfg:BumiAttnEncAgentCfg",
+    },
+)

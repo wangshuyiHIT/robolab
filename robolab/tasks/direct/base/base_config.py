@@ -78,6 +78,9 @@ class SceneContextCfg:
     terrain_generator: TerrainGeneratorCfg = None
     max_init_terrain_level: int = 5
     height_scanner: HeightScannerCfg = HeightScannerCfg()
+    left_feet_scanner_prim_body_name: str = "left_ankle_roll_link"
+    right_feet_scanner_prim_body_name: str = "right_ankle_roll_link"
+    feet_scanner_debug_vis: bool = True
 
 
 @configclass

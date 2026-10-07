@@ -57,3 +57,23 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rpo_agent_cfg:RPORoughAgentCfg",
     },
 )
+
+gym.register(
+    id="Bumi-Flat",
+    entry_point=f"{__name__}.base_env:BaseEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.bumi_env_cfg:BumiFlatEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.bumi_agent_cfg:BumiFlatAgentCfg",
+    },
+)
+
+gym.register(
+    id="Bumi-Rough",
+    entry_point=f"{__name__}.base_env:BaseEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.bumi_env_cfg:BumiRoughEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.bumi_agent_cfg:BumiRoughAgentCfg",
+    },
+)

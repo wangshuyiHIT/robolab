@@ -56,3 +56,23 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rpo_getup_mimic_agent_cfg:RPOGetupMimicPPORunnerCfg",
     },
 )
+
+gym.register(
+    id="Bumi-BeyondMimic",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.bumi_beyondmimic_env_cfg:BumiBeyondMimicEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.bumi_beyondmimic_agent_cfg:BumiBeyondMimicPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Bumi-Getup-Mimic",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.bumi_getup_mimic_env_cfg:BumiGetupMimicEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.bumi_getup_mimic_agent_cfg:BumiGetupMimicPPORunnerCfg",
+    },
+)

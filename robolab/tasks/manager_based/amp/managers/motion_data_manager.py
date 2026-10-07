@@ -53,6 +53,16 @@ if TYPE_CHECKING:
 from robolab.utils.math import vel_forward_diff, ang_vel_from_quat_diff, quat_slerp, linear_interpolate, calc_frame_blend
 
 
+class _NumpyCompatibilityUnpickler(pickle.Unpickler):
+    """Load NumPy 2 pickles when Isaac Sim provides NumPy 1.x at runtime."""
+
+    def find_class(self, module: str, name: str):
+        if module == "numpy._core" or module.startswith("numpy._core."):
+            if not hasattr(np, "_core"):
+                module = module.replace("numpy._core", "numpy.core", 1)
+        return super().find_class(module, name)
+
+
 class LoopMode(enum.Enum):
     CLAMP = 0
     WRAP = 1
@@ -106,7 +116,7 @@ class MotionDataTerm(ManagerTermBase):
             print(f"[Motion Data Manager] Loading motion data from {motion_path}...")
             try:
                 with open(motion_path, "rb") as f:
-                    motion_raw_data = pickle.load(f)
+                    motion_raw_data = _NumpyCompatibilityUnpickler(f).load()
             except (pickle.UnpicklingError, EOFError, AttributeError, ImportError, IndexError):
                 motion_raw_data = joblib.load(motion_path)
             if not isinstance(motion_raw_data, dict):

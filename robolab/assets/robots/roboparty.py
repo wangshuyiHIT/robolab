@@ -30,11 +30,39 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+import os
+
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import DelayedPDActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
 from robolab.assets import ISAAC_DATA_DIR
+
+# Single source of truth for every Bumi train / play / conversion path.
+BUMI_URDF_PATH = os.path.join(
+    ISAAC_DATA_DIR,
+    "robots",
+    "roboparty",
+    "bumi",
+    "urdf",
+    "bumi_edu_pro_collision.urdf",
+)
+BUMI_USD_DIR = os.path.join(
+    ISAAC_DATA_DIR,
+    "robots",
+    "roboparty",
+    "bumi",
+    "usd",
+)
+# MuJoCo companion of the same robot (floating-base MJCF built from the URDF).
+BUMI_MJCF_PATH = os.path.join(
+    ISAAC_DATA_DIR,
+    "robots",
+    "roboparty",
+    "bumi",
+    "mjcf",
+    "bumi.xml",
+)
 
 RPO_CFG = ArticulationCfg(
     spawn=sim_utils.UrdfFileCfg(
@@ -155,6 +183,167 @@ RPO_CFG = ArticulationCfg(
 )
 
 
+# The sole is at z=-0.4733 m relative to base_link for this leg pose (measured
+# from the active URDF foot collision boxes).  A 0.48 m spawn height therefore
+# gives roughly 6 mm of clearance instead of dropping the robot from 0.65 m.
+BUMI_STANDING_ROOT_HEIGHT = 0.48
+# Bumi and RPO both use arm_pitch axis +Y: positive pitch swings the elbows
+# BACKWARD (negative world X).  RPO's standing (+0.18, +0.18) is a slight rear
+# tuck.  Bumi needs a left/right-symmetric, slightly forward stance, so pitch
+# must be the SAME negative value on both arms — never opposite signs (that
+# would put one hand forward and the other back).
+# Roll/yaw are mirrored (±).  Elbow bend is negative on Bumi (limit [-2.26, 0]),
+# opposite in sign to RPO's positive elbow bend.
+BUMI_STANDING_JOINT_POS = {
+    "l_leg_yaw_joint": 0.0,
+    "l_leg_roll_joint": 0.0,
+    "l_leg_pitch_joint": -0.1495,
+    "l_knee_pitch_joint": 0.3215,
+    "l_ankle_pitch_joint": -0.1720,
+    "l_ankle_roll_joint": 0.0,
+    "r_leg_yaw_joint": 0.0,
+    "r_leg_roll_joint": 0.0,
+    "r_leg_pitch_joint": -0.1495,
+    "r_knee_pitch_joint": 0.3215,
+    "r_ankle_pitch_joint": -0.1720,
+    "r_ankle_roll_joint": 0.0,
+    "waist_yaw_joint": 0.0,
+    "l_arm_pitch_joint": -0.20,
+    "l_arm_roll_joint": 0.15,
+    "l_arm_yaw_joint": 0.0,
+    "l_elbow_pitch_joint": -0.35,
+    "r_arm_pitch_joint": -0.20,
+    "r_arm_roll_joint": -0.15,
+    "r_arm_yaw_joint": 0.0,
+    "r_elbow_pitch_joint": -0.35,
+}
+
+
+BUMI_CFG = ArticulationCfg(
+    spawn=sim_utils.UrdfFileCfg(
+        asset_path=BUMI_URDF_PATH,
+        usd_dir=BUMI_USD_DIR,
+        usd_file_name="bumi_edu_pro_collision.usd",
+        # Always rebuild USD from the pinned URDF so play/train cannot reuse a
+        # stale /tmp conversion of another Bumi file.
+        force_usd_conversion=True,
+        fix_base=False,
+        activate_contact_sensors=True,
+        replace_cylinders_with_capsules=True,
+        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(
+                stiffness=0,
+                damping=0,
+            )
+        ),
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=True,
+            solver_position_iteration_count=8,
+            solver_velocity_iteration_count=4,
+        ),
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+            disable_gravity=False,
+            retain_accelerations=False,
+            linear_damping=0.0,
+            angular_damping=0.0,
+            max_linear_velocity=1000.0,
+            max_angular_velocity=1000.0,
+            max_depenetration_velocity=1.0,
+        ),
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        pos=(0.0, 0.0, BUMI_STANDING_ROOT_HEIGHT),
+        joint_pos=BUMI_STANDING_JOINT_POS,
+        joint_vel={".*": 0.0},
+    ),
+    soft_joint_pos_limit_factor=0.90,
+    actuators={
+        "legs": DelayedPDActuatorCfg(
+            joint_names_expr=[
+                ".*_leg_yaw_joint",
+                ".*_leg_roll_joint",
+                ".*_leg_pitch_joint",
+                ".*_knee_pitch_joint",
+            ],
+            effort_limit_sim={
+                ".*_leg_yaw_joint": 27.0,
+                ".*_leg_roll_joint": 27.0,
+                ".*_leg_pitch_joint": 60.0,
+                ".*_knee_pitch_joint": 60.0,
+            },
+            velocity_limit_sim={
+                ".*_leg_yaw_joint": 9.0,
+                ".*_leg_roll_joint": 12.0,
+                ".*_leg_pitch_joint": 12.0,
+                ".*_knee_pitch_joint": 12.0,
+            },
+            stiffness={
+                ".*_leg_yaw_joint": 60.0,
+                ".*_leg_roll_joint": 60.0,
+                ".*_leg_pitch_joint": 60.0,
+                ".*_knee_pitch_joint": 45.0,
+            },
+            damping={
+                ".*_leg_yaw_joint": 2.5,
+                ".*_leg_roll_joint": 3.0,
+                ".*_leg_pitch_joint": 3.0,
+                ".*_knee_pitch_joint": 2.0,
+            },
+            armature=0.01,
+            min_delay=0,
+            max_delay=2,
+        ),
+        "waist": DelayedPDActuatorCfg(
+            joint_names_expr=["waist_yaw_joint"],
+            effort_limit_sim=27.0,
+            velocity_limit_sim=9.0,
+            stiffness=53.0,
+            damping=3.4,
+            armature=0.01,
+            min_delay=0,
+            max_delay=2,
+        ),
+        "feet": DelayedPDActuatorCfg(
+            joint_names_expr=[
+                ".*_ankle_pitch_joint",
+                ".*_ankle_roll_joint",
+            ],
+            effort_limit_sim=10.0,
+            velocity_limit_sim=10.0,
+            stiffness={
+                ".*_ankle_pitch_joint": 10.0,
+                ".*_ankle_roll_joint": 10.0,
+            },
+            damping={
+                ".*_ankle_pitch_joint": 0.5,
+                ".*_ankle_roll_joint": 0.5,
+            },
+            armature={
+                ".*_ankle_pitch_joint": 0.01,
+                ".*_ankle_roll_joint": 0.01,
+            },
+            min_delay=0,
+            max_delay=2,
+        ),
+        "arms": DelayedPDActuatorCfg(
+            joint_names_expr=[
+                ".*_arm_pitch_joint",
+                ".*_arm_roll_joint",
+                ".*_arm_yaw_joint",
+                ".*_elbow_pitch_joint",
+            ],
+            effort_limit_sim=5.5,
+            velocity_limit_sim=50.0,
+            stiffness=12.0,
+            damping=0.4,
+            armature=0.001,
+            min_delay=0,
+            max_delay=2,
+        ),
+    },
+)
+
+
 RPO_LINKS = [
     "base_link",
     "left_thigh_yaw_link",
@@ -180,4 +369,30 @@ RPO_LINKS = [
     "right_arm_yaw_link",
     "right_elbow_pitch_link",
     "right_elbow_yaw_link",
+]
+
+
+BUMI_LINKS = [
+    "base_link",
+    "waist_yaw_link",
+    "l_arm_pitch_link",
+    "l_arm_roll_link",
+    "l_arm_yaw_link",
+    "l_elbow_pitch_link",
+    "r_arm_pitch_link",
+    "r_arm_roll_link",
+    "r_arm_yaw_link",
+    "r_elbow_pitch_link",
+    "l_leg_pitch_link",
+    "l_leg_roll_link",
+    "l_leg_yaw_link",
+    "l_knee_pitch_link",
+    "l_ankle_pitch_link",
+    "l_ankle_roll_link",
+    "r_leg_pitch_link",
+    "r_leg_roll_link",
+    "r_leg_yaw_link",
+    "r_knee_pitch_link",
+    "r_ankle_pitch_link",
+    "r_ankle_roll_link",
 ]

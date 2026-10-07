@@ -94,20 +94,20 @@ class SceneCfg(InteractiveSceneCfg):
         )
 
         self.left_feet_scanner = RayCasterCfg(
-            prim_path="{ENV_REGEX_NS}/Robot/left_ankle_roll_link",
+            prim_path="{ENV_REGEX_NS}/Robot/" + config.left_feet_scanner_prim_body_name,
             offset=RayCasterCfg.OffsetCfg(pos=(0.025, 0.0, 20.0)),
             ray_alignment='yaw',
             pattern_cfg=patterns.GridPatternCfg(resolution=0.01, size=[0.12, 0.04]),
-            debug_vis=True,
+            debug_vis=config.feet_scanner_debug_vis,
             mesh_prim_paths=["/World/ground"],
             update_period=step_dt,
         )
         self.right_feet_scanner = RayCasterCfg(
-            prim_path="{ENV_REGEX_NS}/Robot/right_ankle_roll_link",
+            prim_path="{ENV_REGEX_NS}/Robot/" + config.right_feet_scanner_prim_body_name,
             offset=RayCasterCfg.OffsetCfg(pos=(0.025, 0.0, 20.0)),
             ray_alignment='yaw',
             pattern_cfg=patterns.GridPatternCfg(resolution=0.01, size=[0.12, 0.04]),
-            debug_vis=True,
+            debug_vis=config.feet_scanner_debug_vis,
             mesh_prim_paths=["/World/ground"],
             update_period=step_dt,
         )

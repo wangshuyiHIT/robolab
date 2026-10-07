@@ -56,6 +56,96 @@ def track_lin_vel_xy_yaw_frame_exp(
     return reward
 
 
+def track_lin_vel_x_yaw_frame_exp(
+    env: BaseEnv, std: float, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Emphasize forward speed tracking for straight-line walking."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    vel_yaw = math_utils.quat_apply_inverse(
+        math_utils.yaw_quat(asset.data.root_quat_w), asset.data.root_lin_vel_w[:, :3]
+    )
+    lin_vel_error = torch.square(env.command_generator.command[:, 0] - vel_yaw[:, 0])
+    reward = torch.exp(-lin_vel_error / std**2)
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def lateral_drift_l2(
+    env: BaseEnv,
+    cmd_y_threshold: float = 0.05,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize sideways body velocity when the command is nearly straight ahead."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    vel_yaw = math_utils.quat_apply_inverse(
+        math_utils.yaw_quat(asset.data.root_quat_w), asset.data.root_lin_vel_w[:, :3]
+    )
+    cmd = env.command_generator.command
+    straight_mask = (torch.abs(cmd[:, 1]) < cmd_y_threshold).float()
+    reward = torch.square(vel_yaw[:, 1]) * straight_mask
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def yaw_rate_l2_when_straight(
+    env: BaseEnv,
+    cmd_yaw_threshold: float = 0.1,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize turning rate when the yaw command is near zero (walk straight)."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd_yaw = env.command_generator.command[:, 2]
+    straight_mask = (torch.abs(cmd_yaw) < cmd_yaw_threshold).float()
+    reward = torch.square(asset.data.root_ang_vel_w[:, 2]) * straight_mask
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def contralateral_arm_leg_pitch(
+    env: BaseEnv,
+    std: float = 0.35,
+    cmd_threshold: float = 0.15,
+    vel_weight: float = 0.15,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward diagonal (contralateral) arm–leg coordination while walking.
+
+    Joints must be ordered ``[l_arm_pitch, r_arm_pitch, l_leg_pitch, r_leg_pitch]``.
+    On Bumi, negative pitch is forward for both arms and hips, so natural gait is:
+
+    * ipsilateral anti-phase: ``l_arm ≈ -l_leg``, ``r_arm ≈ -r_leg``
+    * contralateral in-phase: ``l_arm ≈ r_leg``, ``r_arm ≈ l_leg``
+
+    Same-side (同手同脚) motion increases the error and lowers this reward.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    q = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    qd = asset.data.joint_vel[:, asset_cfg.joint_ids]
+    l_arm, r_arm, l_leg, r_leg = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+    l_arm_v, r_arm_v, l_leg_v, r_leg_v = qd[:, 0], qd[:, 1], qd[:, 2], qd[:, 3]
+
+    pos_error = (
+        torch.square(l_arm + l_leg)
+        + torch.square(r_arm + r_leg)
+        + torch.square(l_arm - r_leg)
+        + torch.square(r_arm - l_leg)
+    )
+    vel_error = (
+        torch.square(l_arm_v + l_leg_v)
+        + torch.square(r_arm_v + r_leg_v)
+        + torch.square(l_arm_v - r_leg_v)
+        + torch.square(r_arm_v - l_leg_v)
+    )
+    error = pos_error + vel_weight * vel_error
+    reward = torch.exp(-error / std**2)
+
+    cmd = env.command_generator.command
+    moving = (torch.linalg.norm(cmd[:, :2], dim=1) + torch.abs(cmd[:, 2])) > cmd_threshold
+    reward = torch.where(moving, reward, torch.zeros_like(reward))
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
 def track_ang_vel_z_world_exp(
     env: BaseEnv, std: float, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
@@ -133,6 +223,19 @@ def feet_air_time_positive_biped(env: BaseEnv, threshold: float, sensor_cfg: Sce
     reward *= (
         torch.norm(env.command_generator.command[:, :2], dim=1) + torch.abs(env.command_generator.command[:, 2])
     ) > 0.01
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
+def moving_single_support(env: BaseEnv, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Reward one-foot support while a non-zero velocity command is active."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    is_contact = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
+    moving = (
+        torch.norm(env.command_generator.command[:, :2], dim=1) + torch.abs(env.command_generator.command[:, 2])
+    ) > 0.05
+    reward = (torch.sum(is_contact.int(), dim=1) == 1).float()
+    reward *= moving
     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
@@ -302,6 +405,39 @@ def feet_height(env: BaseEnv, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntity
     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
+
+def swing_feet_clearance(
+    env: BaseEnv,
+    sensor_cfg: SceneEntityCfg,
+    sensor_cfg1: SceneEntityCfg | None = None,
+    sensor_cfg2: SceneEntityCfg | None = None,
+    ankle_height: float = 0.05,
+    target_height: float = 0.045,
+) -> torch.Tensor:
+    """Reward swing foot clearance close to a target height during single support."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    contacts = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
+    feet_height = torch.stack(
+        [
+            env.scene[sensor.name].data.pos_w[:, 2] - env.scene[sensor.name].data.ray_hits_w[..., 2].mean(dim=-1)
+            for sensor in [sensor_cfg1, sensor_cfg2]
+            if sensor is not None
+        ],
+        dim=-1,
+    )
+    feet_height = torch.clamp(feet_height - ankle_height, min=0.0, max=target_height * 2.0)
+    feet_height = torch.nan_to_num(feet_height, nan=0.0, posinf=target_height * 2.0, neginf=0.0)
+    clearance_reward = torch.clamp(1.0 - torch.abs(feet_height - target_height) / target_height, min=0.0)
+    single_stance = contacts.sum(dim=1) == 1
+    swing_feet = ~contacts
+    reward = torch.where(single_stance.unsqueeze(-1) & swing_feet, clearance_reward, 0.0).sum(dim=1)
+    reward *= (
+        torch.norm(env.command_generator.command[:, :2], dim=1) + torch.abs(env.command_generator.command[:, 2])
+    ) > 0.05
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
+
 def joint_deviation_interrupt(env: BaseEnv, asset_cfg1: SceneEntityCfg, asset_cfg2: SceneEntityCfg, weight1: float, weight2: float) -> torch.Tensor:
     """Penalize joint deviation during interruption."""
     # extract the used quantities (to enable type-hinting)
@@ -312,6 +448,14 @@ def joint_deviation_interrupt(env: BaseEnv, asset_cfg1: SceneEntityCfg, asset_cf
     reward = weight1 * torch.sum(torch.abs(angle1), dim=1) + weight2 * torch.sum(torch.abs(angle2), dim=1)
     reward *= ~env.interrupt_mask
     return reward
+
+
+def paired_joints_mirror_deviation_l1(env: BaseEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Penalize shared drift in ordered left/right joint pairs from default."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    joint_error = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    joint_error = joint_error.reshape(joint_error.shape[0], -1, 2)
+    return torch.sum(torch.abs(joint_error[:, :, 0] + joint_error[:, :, 1]), dim=1)
 
 def stand_still_interrupt(
     env: BaseEnv,

@@ -42,3 +42,13 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rpo_interrupt_agent_cfg:RPOInterruptAgentCfg",
     },
 )
+
+gym.register(
+    id="Bumi-Interrupt",
+    entry_point=f"{__name__}.interrupt_env:InterruptEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.bumi_interrupt_env_cfg:BumiInterruptEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.bumi_interrupt_agent_cfg:BumiInterruptAgentCfg",
+    },
+)

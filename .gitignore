@@ -7,3 +7,5 @@ run_bash.sh
 wandb
 *.png
 *.mp4
+# Generated Bumi URDF→USD cache
+data/robots/roboparty/bumi/usd/
